@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>10-Day Weather Forecast</title>
+  <title>12-Day Weather Forecast</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -126,7 +126,7 @@
       margin-right: .3em;
     }
 
-    /* 10-day grid */
+    /* 12-day grid */
     .forecast-title {
       font-size: .8rem;
       letter-spacing: .12em;
@@ -319,7 +319,7 @@
       wind_speed_unit: 'mph',
       precipitation_unit: 'inch',
       timezone: 'auto',
-      forecast_days: 10,
+      forecast_days: 12,
     });
     const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
     if (!res.ok) throw new Error('Weather data unavailable.');
@@ -356,7 +356,7 @@
 
     document.getElementById('app').innerHTML = `
       <div class="current-card">
-        <div class="location">${location.city}, ${location.state} · ${location.zip}</div>
+        <div class="location">${location.city}, ${location.state}${location.zip ? ' · ' + location.zip : ''}</div>
         <span class="big-icon">${info.icon}</span>
         <div class="condition-label">${info.label}</div>
         <div class="big-temp">${Math.round(c.temperature_2m)}°F</div>
@@ -367,9 +367,25 @@
         </div>
       </div>
 
-      <div class="forecast-title">10-Day Forecast</div>
+      <div class="forecast-title">12-Day Forecast</div>
       <div class="forecast-grid">${forecastCards}</div>
     `;
+  }
+
+  // ── IP geolocation ────────────────────────────────────────────────────────
+
+  async function ipToLocation() {
+    const res = await fetch('https://ipapi.co/json/');
+    if (!res.ok) throw new Error('IP lookup failed');
+    const data = await res.json();
+    if (!data.latitude) throw new Error('No coordinates from IP');
+    return {
+      lat: data.latitude,
+      lon: data.longitude,
+      city: data.city || 'Your Location',
+      state: data.region_code || data.country_code || '',
+      zip: data.postal || '',
+    };
   }
 
   // ── Main entry ────────────────────────────────────────────────────────────
@@ -397,9 +413,19 @@
     if (e.key === 'Enter') loadWeather();
   });
 
-  // Boot with default ZIP
-  document.getElementById('zipInput').value = DEFAULT_ZIP;
-  loadWeather();
+  // Boot: try IP geolocation first, fall back to default ZIP
+  (async () => {
+    document.getElementById('app').innerHTML = '<p class="status-msg">Detecting your location…</p>';
+    try {
+      const location = await ipToLocation();
+      if (location.zip) document.getElementById('zipInput').value = location.zip;
+      const data = await fetchForecast(location.lat, location.lon);
+      renderWeather(location, data);
+    } catch {
+      document.getElementById('zipInput').value = DEFAULT_ZIP;
+      loadWeather();
+    }
+  })();
 </script>
 </body>
 </html>
