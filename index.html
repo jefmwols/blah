@@ -60,7 +60,7 @@
       background: rgba(255,255,255,0.15);
       color: #fff;
       font-size: 1rem;
-      width: 180px;
+      width: 220px;
       backdrop-filter: blur(8px);
       outline: none;
       transition: border-color .2s;
@@ -365,7 +365,7 @@
 
 <div class="page">
   <div class="search-row">
-    <input type="text" id="zipInput" placeholder="ZIP code" maxlength="10" />
+    <input type="text" id="zipInput" placeholder="ZIP code or city" maxlength="60" />
     <button onclick="loadWeather()">Go</button>
   </div>
 
@@ -453,6 +453,26 @@
       lon: parseFloat(place.longitude),
       city: place['place name'],
       state: place['state abbreviation'],
+    };
+  }
+
+  // ── City name → lat/lon via Open-Meteo geocoding ─────────────────────────
+
+  async function cityToLatLon(name) {
+    const res = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=en&format=json`
+    );
+    if (!res.ok) throw new Error('Geocoding service unavailable.');
+    const data = await res.json();
+    if (!data.results?.length) throw new Error(`City "${name}" not found.`);
+    const r = data.results[0];
+    const state = r.country_code === 'US' ? (r.admin1 ?? r.country) : (r.country ?? r.country_code);
+    return {
+      lat: r.latitude,
+      lon: r.longitude,
+      city: r.name,
+      state,
+      zip: '',
     };
   }
 
@@ -623,20 +643,26 @@
   // ── Main entry ────────────────────────────────────────────────────────────
 
   async function loadWeather() {
-    const zip = document.getElementById('zipInput').value.trim() || DEFAULT_ZIP;
-    document.getElementById('zipInput').value = zip;
+    const query = document.getElementById('zipInput').value.trim() || DEFAULT_ZIP;
+    document.getElementById('zipInput').value = query;
 
     document.getElementById('app').innerHTML = '<p class="status-msg">Fetching forecast…</p>';
 
     try {
-      const location = await zipToLatLon(zip);
-      location.zip = zip;
+      const isZip = /^\d{5}$/.test(query);
+      let location;
+      if (isZip) {
+        location = await zipToLatLon(query);
+        location.zip = query;
+      } else {
+        location = await cityToLatLon(query);
+      }
       const data = await fetchForecast(location.lat, location.lon);
       renderWeather(location, data);
     } catch (err) {
       document.getElementById('app').innerHTML = `
         <p class="error-msg">⚠️ ${err.message}</p>
-        <p class="status-msg">Please check the ZIP code and try again.</p>`;
+        <p class="status-msg">Try a 5-digit ZIP code or a city name.</p>`;
     }
   }
 
