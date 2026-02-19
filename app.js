@@ -1,28 +1,6 @@
 const DEFAULT_LOCATION = 'Nashville';
 let lastWeatherData = null;
 
-// ── Cache helpers ─────────────────────────────────────────────────────────
-
-const TTL = {
-  forecast: 30 * 60 * 1000,       // 30 minutes
-  geo:      7 * 24 * 60 * 60 * 1000, // 7 days
-  ip:       4 * 60 * 60 * 1000,    // 4 hours
-};
-
-function cacheGet(key, ttl) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const { ts, data } = JSON.parse(raw);
-    if (Date.now() - ts > ttl) { localStorage.removeItem(key); return null; }
-    return data;
-  } catch { return null; }
-}
-
-function cacheSet(key, data) {
-  try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch {}
-}
-
 // ── Weather code helpers ──────────────────────────────────────────────────
 
 const WMO = {
@@ -103,31 +81,21 @@ function setBackground(code, isDay) {
 // ── ZIP → lat/lon via zippopotam.us ───────────────────────────────────────
 
 async function zipToLatLon(zip) {
-  const cacheKey = `weather_geo_zip_${zip}`;
-  const cached = cacheGet(cacheKey, TTL.geo);
-  if (cached) return cached;
-
   const res = await fetch(`https://api.zippopotam.us/us/${zip.trim()}`);
   if (!res.ok) throw new Error(`ZIP code "${zip}" not found.`);
   const data = await res.json();
   const place = data.places[0];
-  const result = {
+  return {
     lat: parseFloat(place.latitude),
     lon: parseFloat(place.longitude),
     city: place['place name'],
     state: place['state abbreviation'],
   };
-  cacheSet(cacheKey, result);
-  return result;
 }
 
 // ── City name → lat/lon via Open-Meteo geocoding ─────────────────────────
 
 async function cityToLatLon(name) {
-  const cacheKey = `weather_geo_city_${name.toLowerCase().trim()}`;
-  const cached = cacheGet(cacheKey, TTL.geo);
-  if (cached) return cached;
-
   const res = await fetch(
     `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=en&format=json`
   );
@@ -136,24 +104,18 @@ async function cityToLatLon(name) {
   if (!data.results?.length) throw new Error(`City "${name}" not found.`);
   const r = data.results[0];
   const state = r.country_code === 'US' ? (r.admin1 ?? r.country) : (r.country ?? r.country_code);
-  const result = {
+  return {
     lat: r.latitude,
     lon: r.longitude,
     city: r.name,
     state,
     zip: '',
   };
-  cacheSet(cacheKey, result);
-  return result;
 }
 
 // ── Open-Meteo forecast ───────────────────────────────────────────────────
 
 async function fetchForecast(lat, lon) {
-  const cacheKey = `weather_forecast_${lat.toFixed(2)}_${lon.toFixed(2)}`;
-  const cached = cacheGet(cacheKey, TTL.forecast);
-  if (cached) return cached;
-
   const params = new URLSearchParams({
     latitude: lat,
     longitude: lon,
@@ -168,9 +130,7 @@ async function fetchForecast(lat, lon) {
   });
   const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
   if (!res.ok) throw new Error('Weather data unavailable.');
-  const data = await res.json();
-  cacheSet(cacheKey, data);
-  return data;
+  return res.json();
 }
 
 // ── Render ────────────────────────────────────────────────────────────────
@@ -305,23 +265,17 @@ function closeDetail() {
 // ── IP geolocation ────────────────────────────────────────────────────────
 
 async function ipToLocation() {
-  const cacheKey = 'weather_ip_loc';
-  const cached = cacheGet(cacheKey, TTL.ip);
-  if (cached) return cached;
-
   const res = await fetch('https://ipapi.co/json/');
   if (!res.ok) throw new Error('IP lookup failed');
   const data = await res.json();
   if (!data.latitude) throw new Error('No coordinates from IP');
-  const result = {
+  return {
     lat: data.latitude,
     lon: data.longitude,
     city: data.city || 'Your Location',
     state: data.region_code || data.country_code || '',
     zip: data.postal || '',
   };
-  cacheSet(cacheKey, result);
-  return result;
 }
 
 // ── Main entry ────────────────────────────────────────────────────────────
