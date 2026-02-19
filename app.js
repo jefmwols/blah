@@ -249,7 +249,7 @@ function renderWeather(location, data) {
         <span>💧 ${c.relative_humidity_2m}% humidity</span>
         <span>Hi ${Math.round(d.temperature_2m_max[0])}° / Lo ${Math.round(d.temperature_2m_min[0])}°</span>
       </div>
-      <a class="radar-link" href="https://radar.weather.gov/?lon=${location.lon}&lat=${location.lat}" target="_blank" rel="noopener">View Radar</a>
+      <a class="radar-link" href="https://www.windy.com/?rain,${location.lat},${location.lon},8" target="_blank" rel="noopener">View Radar</a>
     </div>
 
     <div class="forecast-title">12-Day Forecast</div>
