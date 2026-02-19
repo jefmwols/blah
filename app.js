@@ -1,6 +1,29 @@
 const DEFAULT_LOCATION = 'Nashville';
 let lastWeatherData = null;
 
+// ── Cache helpers ─────────────────────────────────────────────────────────
+
+const TTL = {
+  forecast: 30 * 60 * 1000,          // 30 minutes
+  geo:      7 * 24 * 60 * 60 * 1000, // 7 days
+  ip:       4 * 60 * 60 * 1000,      // 4 hours
+  reverse:  24 * 60 * 60 * 1000,     // 1 day
+};
+
+function cacheGet(key, ttl) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { ts, data } = JSON.parse(raw);
+    if (Date.now() - ts > ttl) { localStorage.removeItem(key); return null; }
+    return data;
+  } catch { return null; }
+}
+
+function cacheSet(key, data) {
+  try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch {}
+}
+
 // ── Weather code helpers ──────────────────────────────────────────────────
 
 const WMO = {
@@ -78,24 +101,69 @@ function setBackground(code, isDay) {
   }, 350);
 }
 
+// ── Device GPS ────────────────────────────────────────────────────────────
+
+function getDeviceLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) { reject(new Error('Geolocation not supported')); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      () => reject(new Error('Geolocation denied')),
+      { timeout: 8000 }
+    );
+  });
+}
+
+async function reverseGeocode(lat, lon) {
+  const cacheKey = `weather_rev_${lat.toFixed(2)}_${lon.toFixed(2)}`;
+  const cached = cacheGet(cacheKey, TTL.reverse);
+  if (cached) return cached;
+
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+    { headers: { 'Accept-Language': 'en' } }
+  );
+  const data = res.ok ? await res.json() : {};
+  const addr = data.address || {};
+  const result = {
+    lat,
+    lon,
+    city:  addr.city || addr.town || addr.village || addr.county || 'Your Location',
+    state: addr.state_code || addr.state || '',
+    zip:   addr.postcode || '',
+  };
+  cacheSet(cacheKey, result);
+  return result;
+}
+
 // ── ZIP → lat/lon via zippopotam.us ───────────────────────────────────────
 
 async function zipToLatLon(zip) {
+  const cacheKey = `weather_geo_zip_${zip}`;
+  const cached = cacheGet(cacheKey, TTL.geo);
+  if (cached) return cached;
+
   const res = await fetch(`https://api.zippopotam.us/us/${zip.trim()}`);
   if (!res.ok) throw new Error(`ZIP code "${zip}" not found.`);
   const data = await res.json();
   const place = data.places[0];
-  return {
+  const result = {
     lat: parseFloat(place.latitude),
     lon: parseFloat(place.longitude),
     city: place['place name'],
     state: place['state abbreviation'],
   };
+  cacheSet(cacheKey, result);
+  return result;
 }
 
 // ── City name → lat/lon via Open-Meteo geocoding ─────────────────────────
 
 async function cityToLatLon(name) {
+  const cacheKey = `weather_geo_city_${name.toLowerCase().trim()}`;
+  const cached = cacheGet(cacheKey, TTL.geo);
+  if (cached) return cached;
+
   const res = await fetch(
     `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=en&format=json`
   );
@@ -104,13 +172,15 @@ async function cityToLatLon(name) {
   if (!data.results?.length) throw new Error(`City "${name}" not found.`);
   const r = data.results[0];
   const state = r.country_code === 'US' ? (r.admin1 ?? r.country) : (r.country ?? r.country_code);
-  return {
+  const result = {
     lat: r.latitude,
     lon: r.longitude,
     city: r.name,
     state,
     zip: '',
   };
+  cacheSet(cacheKey, result);
+  return result;
 }
 
 // ── Open-Meteo forecast ───────────────────────────────────────────────────
@@ -128,9 +198,15 @@ async function fetchForecast(lat, lon) {
     timezone: 'auto',
     forecast_days: 12,
   });
+  const cacheKey = `weather_forecast_${lat.toFixed(2)}_${lon.toFixed(2)}`;
+  const cached = cacheGet(cacheKey, TTL.forecast);
+  if (cached) return cached;
+
   const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
   if (!res.ok) throw new Error('Weather data unavailable.');
-  return res.json();
+  const data = await res.json();
+  cacheSet(cacheKey, data);
+  return data;
 }
 
 // ── Render ────────────────────────────────────────────────────────────────
@@ -265,17 +341,23 @@ function closeDetail() {
 // ── IP geolocation ────────────────────────────────────────────────────────
 
 async function ipToLocation() {
+  const cacheKey = 'weather_ip_loc';
+  const cached = cacheGet(cacheKey, TTL.ip);
+  if (cached) return cached;
+
   const res = await fetch('https://ipapi.co/json/');
   if (!res.ok) throw new Error('IP lookup failed');
   const data = await res.json();
   if (!data.latitude) throw new Error('No coordinates from IP');
-  return {
+  const result = {
     lat: data.latitude,
     lon: data.longitude,
     city: data.city || 'Your Location',
     state: data.region_code || data.country_code || '',
     zip: data.postal || '',
   };
+  cacheSet(cacheKey, result);
+  return result;
 }
 
 // ── Main entry ────────────────────────────────────────────────────────────
@@ -309,11 +391,17 @@ document.getElementById('zipInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') loadWeather();
 });
 
-// Boot: try IP geolocation first, fall back to default city
+// Boot: GPS → IP geolocation → default city
 (async () => {
   document.getElementById('app').innerHTML = '<p class="status-msg">Detecting your location…</p>';
   try {
-    const location = await ipToLocation();
+    let location;
+    try {
+      const coords = await getDeviceLocation();
+      location = await reverseGeocode(coords.lat, coords.lon);
+    } catch {
+      location = await ipToLocation();
+    }
     if (location.zip) document.getElementById('zipInput').value = location.zip;
     const data = await fetchForecast(location.lat, location.lon);
     renderWeather(location, data);
