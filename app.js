@@ -107,7 +107,7 @@ function getDeviceLocation() {
     if (!navigator.geolocation) { reject(new Error('Geolocation not supported')); return; }
     navigator.geolocation.getCurrentPosition(
       pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
-      () => reject(new Error('Geolocation denied')),
+      err => reject(Object.assign(new Error('Geolocation denied'), { code: err.code })),
       { timeout: 8000 }
     );
   });
@@ -393,8 +393,16 @@ document.getElementById('zipInput').addEventListener('keydown', e => {
     try {
       const coords = await getDeviceLocation();
       location = await reverseGeocode(coords.lat, coords.lon);
-    } catch {
-      // GPS unavailable/denied — fall back to last explicit search
+    } catch (gpsErr) {
+      // Show a hint when permission is explicitly denied
+      if (gpsErr.code === 1) {
+        const hint = document.createElement('p');
+        hint.className = 'status-msg';
+        hint.style.cssText = 'font-size:0.75rem;opacity:0.6;margin-top:0.25rem';
+        hint.textContent = 'Location access denied — enable it in browser settings to use GPS.';
+        document.querySelector('.search-row').after(hint);
+      }
+      // Fall back to last explicit search
       const saved = localStorage.getItem('weather_user_location');
       if (saved) {
         const { query, location: savedLocation } = JSON.parse(saved);
