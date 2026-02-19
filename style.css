@@ -160,7 +160,13 @@ body {
   text-transform: uppercase;
   letter-spacing: .07em;
   opacity: .75;
-  margin-bottom: .35rem;
+  margin-bottom: .1rem;
+}
+
+.day-card .day-date {
+  font-size: .68rem;
+  opacity: .5;
+  margin-bottom: .3rem;
 }
 
 .day-card .day-icon {

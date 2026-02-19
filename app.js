@@ -125,6 +125,11 @@ function dayLabel(dateStr, index) {
   return d.toLocaleDateString('en-US', { weekday: 'short' });
 }
 
+function dayDate(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 function renderWeather(location, data) {
   lastWeatherData = data;
 
@@ -140,6 +145,7 @@ function renderWeather(location, data) {
     return `
       <div class="day-card ${i === 0 ? 'today' : ''}" onclick="openDayDetail(${i})">
         <div class="day-name">${dayLabel(date, i)}</div>
+        <div class="day-date">${dayDate(date)}</div>
         <div class="day-icon">${di.icon}</div>
         <div class="day-hi">${Math.round(d.temperature_2m_max[i])}°</div>
         <div class="day-lo">${Math.round(d.temperature_2m_min[i])}°</div>
