@@ -385,7 +385,7 @@ document.getElementById('zipInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') loadWeather();
 });
 
-// Boot: GPS → last user search → IP geolocation → default city
+// Boot: GPS → IP geolocation → default city
 (async () => {
   document.getElementById('app').innerHTML = '<p class="status-msg">Detecting your location…</p>';
   try {
@@ -393,24 +393,7 @@ document.getElementById('zipInput').addEventListener('keydown', e => {
     try {
       const coords = await getDeviceLocation();
       location = await reverseGeocode(coords.lat, coords.lon);
-    } catch (gpsErr) {
-      // Show a hint when permission is explicitly denied
-      if (gpsErr.code === 1) {
-        const hint = document.createElement('p');
-        hint.className = 'status-msg';
-        hint.style.cssText = 'font-size:0.75rem;opacity:0.6;margin-top:0.25rem';
-        hint.textContent = 'Location access denied — enable it in browser settings to use GPS.';
-        document.querySelector('.search-row').after(hint);
-      }
-      // Fall back to last explicit search
-      const saved = localStorage.getItem('weather_user_location');
-      if (saved) {
-        const { query, location: savedLocation } = JSON.parse(saved);
-        document.getElementById('zipInput').value = query;
-        const data = await fetchForecast(savedLocation.lat, savedLocation.lon);
-        renderWeather(savedLocation, data);
-        return;
-      }
+    } catch {
       location = await ipToLocation();
     }
     if (location.zip) document.getElementById('zipInput').value = location.zip;
