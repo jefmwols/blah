@@ -7,7 +7,6 @@ const TTL = {
   forecast: 30 * 60 * 1000,          // 30 minutes
   geo:      7 * 24 * 60 * 60 * 1000, // 7 days
   ip:       4 * 60 * 60 * 1000,      // 4 hours
-  reverse:  24 * 60 * 60 * 1000,     // 1 day
 };
 
 function cacheGet(key, ttl) {
@@ -115,25 +114,19 @@ function getDeviceLocation() {
 }
 
 async function reverseGeocode(lat, lon) {
-  const cacheKey = `weather_rev_${lat.toFixed(2)}_${lon.toFixed(2)}`;
-  const cached = cacheGet(cacheKey, TTL.reverse);
-  if (cached) return cached;
-
   const res = await fetch(
     `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
     { headers: { 'Accept-Language': 'en' } }
   );
   const data = res.ok ? await res.json() : {};
   const addr = data.address || {};
-  const result = {
+  return {
     lat,
     lon,
     city:  addr.city || addr.town || addr.village || addr.county || 'Your Location',
     state: addr.state_code || addr.state || '',
     zip:   addr.postcode || '',
   };
-  cacheSet(cacheKey, result);
-  return result;
 }
 
 // ── ZIP → lat/lon via zippopotam.us ───────────────────────────────────────
