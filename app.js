@@ -1,4 +1,4 @@
-const DEFAULT_ZIP = '38256';
+const DEFAULT_LOCATION = 'Nashville';
 let lastWeatherData = null;
 
 // ── Weather code helpers ──────────────────────────────────────────────────
@@ -259,7 +259,7 @@ async function ipToLocation() {
 // ── Main entry ────────────────────────────────────────────────────────────
 
 async function loadWeather() {
-  const query = document.getElementById('zipInput').value.trim() || DEFAULT_ZIP;
+  const query = document.getElementById('zipInput').value.trim() || DEFAULT_LOCATION;
   document.getElementById('zipInput').value = query;
 
   document.getElementById('app').innerHTML = '<p class="status-msg">Fetching forecast…</p>';
@@ -296,7 +296,7 @@ document.getElementById('zipInput').addEventListener('keydown', e => {
     const data = await fetchForecast(location.lat, location.lon);
     renderWeather(location, data);
   } catch {
-    document.getElementById('zipInput').value = DEFAULT_ZIP;
+    document.getElementById('zipInput').value = DEFAULT_LOCATION;
     loadWeather();
   }
 })();
