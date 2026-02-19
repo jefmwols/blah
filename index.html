@@ -151,7 +151,7 @@
       padding: .9rem .6rem;
       text-align: center;
       transition: background .2s, transform .15s;
-      cursor: default;
+      cursor: pointer;
     }
     .day-card:hover {
       background: rgba(255,255,255,0.22);
@@ -193,6 +193,147 @@
       margin-top: .3rem;
     }
 
+    /* Day detail bottom sheet */
+    .detail-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s;
+    }
+    .detail-backdrop.open {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .detail-sheet {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(12,18,40,0.97);
+      backdrop-filter: blur(24px);
+      border-radius: 1.4rem 1.4rem 0 0;
+      border-top: 1px solid rgba(255,255,255,0.15);
+      padding: 1.2rem 1.4rem 2rem;
+      z-index: 101;
+      transform: translateY(100%);
+      transition: transform .32s cubic-bezier(.32,.72,0,1);
+      max-height: 75vh;
+      overflow-y: auto;
+    }
+    .detail-sheet.open {
+      transform: translateY(0);
+    }
+
+    .sheet-handle {
+      width: 40px;
+      height: 4px;
+      background: rgba(255,255,255,0.3);
+      border-radius: 2px;
+      margin: 0 auto .9rem;
+    }
+
+    .sheet-header {
+      text-align: center;
+      margin-bottom: 1.2rem;
+    }
+    .sheet-header .sh-day {
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: .04em;
+    }
+    .sheet-header .sh-date {
+      font-size: .8rem;
+      opacity: .6;
+      margin-top: .15rem;
+    }
+    .sheet-header .sh-summary {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: .5rem;
+      margin-top: .5rem;
+      font-size: 1.4rem;
+    }
+    .sheet-header .sh-hilo {
+      font-size: .85rem;
+      opacity: .75;
+      margin-top: .2rem;
+    }
+
+    .sheet-section-label {
+      font-size: .7rem;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      opacity: .55;
+      margin: 1.1rem 0 .6rem;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      padding-top: .8rem;
+    }
+
+    /* Hourly scroll */
+    .hourly-scroll {
+      display: flex;
+      gap: .5rem;
+      overflow-x: auto;
+      padding-bottom: .4rem;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .hourly-scroll::-webkit-scrollbar { display: none; }
+
+    .hour-item {
+      flex: 0 0 auto;
+      text-align: center;
+      background: rgba(255,255,255,0.08);
+      border-radius: .8rem;
+      padding: .55rem .5rem;
+      min-width: 54px;
+    }
+    .hour-item.current-hour {
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.3);
+    }
+    .hour-item .h-time {
+      font-size: .65rem;
+      opacity: .65;
+      margin-bottom: .25rem;
+    }
+    .hour-item .h-icon { font-size: 1.2rem; line-height: 1; }
+    .hour-item .h-temp {
+      font-size: .85rem;
+      font-weight: 600;
+      margin-top: .2rem;
+    }
+    .hour-item .h-rain {
+      font-size: .65rem;
+      opacity: .65;
+      margin-top: .15rem;
+    }
+
+    /* Sun row */
+    .sun-row {
+      display: flex;
+      justify-content: center;
+      gap: 2.5rem;
+      text-align: center;
+      margin-top: .2rem;
+    }
+    .sun-row .sun-item .sun-label {
+      font-size: .7rem;
+      opacity: .55;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    .sun-row .sun-item .sun-time {
+      font-size: 1.1rem;
+      font-weight: 500;
+      margin-top: .2rem;
+    }
+
     /* Error / loading */
     .status-msg {
       text-align: center;
@@ -215,6 +356,13 @@
 
 <div id="bg"></div>
 
+<!-- Day detail bottom sheet -->
+<div class="detail-backdrop" id="detailBackdrop" onclick="closeDetail()"></div>
+<div class="detail-sheet" id="detailSheet">
+  <div class="sheet-handle"></div>
+  <div id="detailContent"></div>
+</div>
+
 <div class="page">
   <div class="search-row">
     <input type="text" id="zipInput" placeholder="ZIP code" maxlength="10" />
@@ -228,6 +376,7 @@
 
 <script>
   const DEFAULT_ZIP = '38256';
+  let lastWeatherData = null;
 
   // ── Weather code helpers ──────────────────────────────────────────────────
 
@@ -314,7 +463,8 @@
       latitude: lat,
       longitude: lon,
       current: 'temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,is_day',
-      daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
+      daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset',
+      hourly: 'temperature_2m,weather_code,precipitation_probability,wind_speed_10m',
       temperature_unit: 'fahrenheit',
       wind_speed_unit: 'mph',
       precipitation_unit: 'inch',
@@ -335,6 +485,8 @@
   }
 
   function renderWeather(location, data) {
+    lastWeatherData = data;
+
     const c = data.current;
     const d = data.daily;
     const info = wmo(c.weather_code);
@@ -345,7 +497,7 @@
       const di = wmo(d.weather_code[i]);
       const rain = d.precipitation_probability_max[i];
       return `
-        <div class="day-card ${i === 0 ? 'today' : ''}">
+        <div class="day-card ${i === 0 ? 'today' : ''}" onclick="openDayDetail(${i})">
           <div class="day-name">${dayLabel(date, i)}</div>
           <div class="day-icon">${di.icon}</div>
           <div class="day-hi">${Math.round(d.temperature_2m_max[i])}°</div>
@@ -370,6 +522,86 @@
       <div class="forecast-title">12-Day Forecast</div>
       <div class="forecast-grid">${forecastCards}</div>
     `;
+  }
+
+  // ── Day detail sheet ──────────────────────────────────────────────────────
+
+  function openDayDetail(dayIndex) {
+    if (!lastWeatherData) return;
+    const d = lastWeatherData.daily;
+    const h = lastWeatherData.hourly;
+    const dateStr = d.time[dayIndex];           // e.g. "2025-01-15"
+    const dayInfo = wmo(d.weather_code[dayIndex]);
+
+    // Full date label
+    const dateObj = new Date(dateStr + 'T12:00:00');
+    const fullDate = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    const dayName = dayIndex === 0 ? 'Today' : dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+
+    // Filter hourly entries for this day
+    const hours = h.time
+      .map((t, i) => ({ t, i }))
+      .filter(({ t }) => t.startsWith(dateStr));
+
+    // Current hour string for highlighting (today only)
+    const nowHour = dayIndex === 0
+      ? new Date().toISOString().slice(0, 13)   // "2025-01-15T14"
+      : null;
+
+    const hourItems = hours.map(({ t, i }) => {
+      const hourLabel = new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+      const isNow = nowHour && t.startsWith(nowHour);
+      const rain = h.precipitation_probability[i];
+      return `
+        <div class="hour-item ${isNow ? 'current-hour' : ''}">
+          <div class="h-time">${isNow ? 'Now' : hourLabel}</div>
+          <div class="h-icon">${wmo(h.weather_code[i]).icon}</div>
+          <div class="h-temp">${Math.round(h.temperature_2m[i])}°</div>
+          ${rain != null ? `<div class="h-rain">💧${rain}%</div>` : ''}
+        </div>`;
+    }).join('');
+
+    // Sunrise / sunset
+    const fmtTime = iso => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const sunriseStr = d.sunrise?.[dayIndex] ? fmtTime(d.sunrise[dayIndex]) : null;
+    const sunsetStr  = d.sunset?.[dayIndex]  ? fmtTime(d.sunset[dayIndex])  : null;
+    const sunSection = (sunriseStr || sunsetStr) ? `
+      <div class="sheet-section-label">Sun</div>
+      <div class="sun-row">
+        ${sunriseStr ? `<div class="sun-item"><div class="sun-label">Sunrise</div><div class="sun-time">🌅 ${sunriseStr}</div></div>` : ''}
+        ${sunsetStr  ? `<div class="sun-item"><div class="sun-label">Sunset</div><div class="sun-time">🌇 ${sunsetStr}</div></div>`  : ''}
+      </div>` : '';
+
+    document.getElementById('detailContent').innerHTML = `
+      <div class="sheet-header">
+        <div class="sh-day">${dayName}</div>
+        <div class="sh-date">${fullDate}</div>
+        <div class="sh-summary">
+          <span>${dayInfo.icon}</span>
+          <span>${dayInfo.label}</span>
+        </div>
+        <div class="sh-hilo">
+          Hi ${Math.round(d.temperature_2m_max[dayIndex])}° &nbsp;/&nbsp; Lo ${Math.round(d.temperature_2m_min[dayIndex])}°
+        </div>
+      </div>
+
+      <div class="sheet-section-label">Hourly</div>
+      <div class="hourly-scroll">${hourItems}</div>
+      ${sunSection}
+    `;
+
+    document.getElementById('detailBackdrop').classList.add('open');
+    document.getElementById('detailSheet').classList.add('open');
+    // Scroll current hour into view
+    setTimeout(() => {
+      const cur = document.querySelector('.hour-item.current-hour');
+      if (cur) cur.scrollIntoView({ inline: 'center', behavior: 'smooth' });
+    }, 350);
+  }
+
+  function closeDetail() {
+    document.getElementById('detailBackdrop').classList.remove('open');
+    document.getElementById('detailSheet').classList.remove('open');
   }
 
   // ── IP geolocation ────────────────────────────────────────────────────────
