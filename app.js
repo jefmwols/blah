@@ -246,6 +246,36 @@ function closeDetail() {
   document.getElementById('detailSheet').classList.remove('open');
 }
 
+// ── Device GPS geolocation ────────────────────────────────────────────────
+
+function deviceLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Geolocation not supported'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      err => reject(new Error(err.message)),
+      { timeout: 10000, maximumAge: 60000 }
+    );
+  });
+}
+
+// ── Reverse geocoding via Nominatim ───────────────────────────────────────
+
+async function reverseGeocode(lat, lon) {
+  const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`;
+  const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+  if (!res.ok) throw new Error('Reverse geocoding failed');
+  const data = await res.json();
+  const addr = data.address || {};
+  const city  = addr.city || addr.town || addr.village || addr.county || 'Your Location';
+  const state = addr.state_code || addr.state || addr.country_code?.toUpperCase() || '';
+  const zip   = addr.postcode || '';
+  return { lat, lon, city, state, zip };
+}
+
 // ── IP geolocation ────────────────────────────────────────────────────────
 
 async function ipToLocation() {
@@ -293,16 +323,26 @@ document.getElementById('zipInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') loadWeather();
 });
 
-// Boot: try IP geolocation first, fall back to default ZIP
+// Boot: try device GPS → IP geolocation → default location
 (async () => {
   document.getElementById('app').innerHTML = '<p class="status-msg">Detecting your location…</p>';
   try {
-    const location = await ipToLocation();
+    const { lat, lon } = await deviceLocation();
+    const location = await reverseGeocode(lat, lon);
     if (location.zip) document.getElementById('zipInput').value = location.zip;
+    else document.getElementById('zipInput').value = location.city;
     const data = await fetchForecast(location.lat, location.lon);
     renderWeather(location, data);
   } catch {
-    document.getElementById('zipInput').value = DEFAULT_LOCATION;
-    loadWeather();
+    // Device GPS unavailable or denied — fall back to IP geolocation
+    try {
+      const location = await ipToLocation();
+      if (location.zip) document.getElementById('zipInput').value = location.zip;
+      const data = await fetchForecast(location.lat, location.lon);
+      renderWeather(location, data);
+    } catch {
+      document.getElementById('zipInput').value = DEFAULT_LOCATION;
+      loadWeather();
+    }
   }
 })();
