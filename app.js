@@ -385,25 +385,24 @@ document.getElementById('zipInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') loadWeather();
 });
 
-// Boot: last user search → GPS → IP geolocation → default city
+// Boot: GPS → last user search → IP geolocation → default city
 (async () => {
   document.getElementById('app').innerHTML = '<p class="status-msg">Detecting your location…</p>';
   try {
-    // Restore the user's last explicit search first
-    const saved = localStorage.getItem('weather_user_location');
-    if (saved) {
-      const { query, location } = JSON.parse(saved);
-      document.getElementById('zipInput').value = query;
-      const data = await fetchForecast(location.lat, location.lon);
-      renderWeather(location, data);
-      return;
-    }
-
     let location;
     try {
       const coords = await getDeviceLocation();
       location = await reverseGeocode(coords.lat, coords.lon);
     } catch {
+      // GPS unavailable/denied — fall back to last explicit search
+      const saved = localStorage.getItem('weather_user_location');
+      if (saved) {
+        const { query, location: savedLocation } = JSON.parse(saved);
+        document.getElementById('zipInput').value = query;
+        const data = await fetchForecast(savedLocation.lat, savedLocation.lon);
+        renderWeather(savedLocation, data);
+        return;
+      }
       location = await ipToLocation();
     }
     if (location.zip) document.getElementById('zipInput').value = location.zip;
