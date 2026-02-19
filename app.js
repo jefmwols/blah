@@ -1,85 +1,133 @@
 const DEFAULT_LOCATION = 'Nashville';
 let lastWeatherData = null;
 
+// ── Cache helpers ─────────────────────────────────────────────────────────
+
+const TTL = {
+  forecast: 30 * 60 * 1000,       // 30 minutes
+  geo:      7 * 24 * 60 * 60 * 1000, // 7 days
+  ip:       4 * 60 * 60 * 1000,    // 4 hours
+};
+
+function cacheGet(key, ttl) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { ts, data } = JSON.parse(raw);
+    if (Date.now() - ts > ttl) { localStorage.removeItem(key); return null; }
+    return data;
+  } catch { return null; }
+}
+
+function cacheSet(key, data) {
+  try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch {}
+}
+
 // ── Weather code helpers ──────────────────────────────────────────────────
 
 const WMO = {
-  0:  { label: 'Clear Sky',         icon: '☀️',  bg: 'clear sky sunshine blue',        grad: '#1a6ba0,#87CEEB' },
-  1:  { label: 'Mainly Clear',      icon: '🌤️', bg: 'partly cloudy blue sky',          grad: '#2a7ab5,#90c8e0' },
-  2:  { label: 'Partly Cloudy',     icon: '⛅',  bg: 'partly cloudy sky',               grad: '#3a6b8a,#90a8c0' },
-  3:  { label: 'Overcast',          icon: '☁️',  bg: 'overcast grey sky clouds',        grad: '#3a4a5a,#6a7a8a' },
-  45: { label: 'Foggy',             icon: '🌫️', bg: 'foggy misty morning nature',      grad: '#5a6a7a,#8a9aaa' },
-  48: { label: 'Icy Fog',           icon: '🌫️', bg: 'foggy misty winter',              grad: '#5a6a7a,#9aaabb' },
-  51: { label: 'Light Drizzle',     icon: '🌦️', bg: 'light rain drizzle nature',       grad: '#2a4a6a,#4a7a9a' },
-  53: { label: 'Drizzle',           icon: '🌧️', bg: 'rainy day grey sky',              grad: '#2a4060,#405070' },
-  55: { label: 'Heavy Drizzle',     icon: '🌧️', bg: 'heavy rain storm clouds',         grad: '#202a3a,#304050' },
-  61: { label: 'Light Rain',        icon: '🌦️', bg: 'rain drops water nature',         grad: '#1a3a5a,#2a5070' },
-  63: { label: 'Rain',              icon: '🌧️', bg: 'rainy weather grey',              grad: '#1a304a,#2a4060' },
-  65: { label: 'Heavy Rain',        icon: '🌧️', bg: 'heavy rain storm dark clouds',    grad: '#101a2a,#202a3a' },
-  71: { label: 'Light Snow',        icon: '🌨️', bg: 'light snowfall winter landscape', grad: '#5a6a8a,#b0c0d8' },
-  73: { label: 'Snow',              icon: '❄️',  bg: 'snow winter landscape serene',    grad: '#4a5a7a,#a0b0c8' },
-  75: { label: 'Heavy Snow',        icon: '❄️',  bg: 'heavy snowstorm blizzard',        grad: '#3a4a6a,#8090a8' },
-  77: { label: 'Snow Grains',       icon: '🌨️', bg: 'snow grains winter sky',          grad: '#4a5a78,#9aaac0' },
-  80: { label: 'Rain Showers',      icon: '🌦️', bg: 'rain shower clouds nature',       grad: '#1a3a5a,#3a5a7a' },
-  81: { label: 'Heavy Showers',     icon: '🌧️', bg: 'heavy rain shower storm',         grad: '#101a2a,#1a2a3a' },
-  82: { label: 'Violent Showers',   icon: '⛈️', bg: 'violent storm rain dark sky',     grad: '#0a1020,#101a28' },
-  85: { label: 'Snow Showers',      icon: '🌨️', bg: 'snow shower winter',              grad: '#3a4a6a,#8090b0' },
-  86: { label: 'Heavy Snow Showers',icon: '❄️',  bg: 'heavy snowfall blizzard',         grad: '#2a3a5a,#6070a0' },
-  95: { label: 'Thunderstorm',      icon: '⛈️', bg: 'thunderstorm lightning dark sky',  grad: '#0a0f1a,#0f1a28' },
-  96: { label: 'Thunderstorm+Hail', icon: '⛈️', bg: 'thunderstorm hail storm',          grad: '#080e18,#0e1820' },
-  99: { label: 'Severe Storm',      icon: '⛈️', bg: 'severe thunderstorm lightning',    grad: '#060b12,#0b1018' },
+  0:  { label: 'Clear Sky',          icon: '☀️' },
+  1:  { label: 'Mainly Clear',       icon: '🌤️' },
+  2:  { label: 'Partly Cloudy',      icon: '⛅' },
+  3:  { label: 'Overcast',           icon: '☁️' },
+  45: { label: 'Foggy',              icon: '🌫️' },
+  48: { label: 'Icy Fog',            icon: '🌫️' },
+  51: { label: 'Light Drizzle',      icon: '🌦️' },
+  53: { label: 'Drizzle',            icon: '🌧️' },
+  55: { label: 'Heavy Drizzle',      icon: '🌧️' },
+  61: { label: 'Light Rain',         icon: '🌦️' },
+  63: { label: 'Rain',               icon: '🌧️' },
+  65: { label: 'Heavy Rain',         icon: '🌧️' },
+  71: { label: 'Light Snow',         icon: '🌨️' },
+  73: { label: 'Snow',               icon: '❄️' },
+  75: { label: 'Heavy Snow',         icon: '❄️' },
+  77: { label: 'Snow Grains',        icon: '🌨️' },
+  80: { label: 'Rain Showers',       icon: '🌦️' },
+  81: { label: 'Heavy Showers',      icon: '🌧️' },
+  82: { label: 'Violent Showers',    icon: '⛈️' },
+  85: { label: 'Snow Showers',       icon: '🌨️' },
+  86: { label: 'Heavy Snow Showers', icon: '❄️' },
+  95: { label: 'Thunderstorm',       icon: '⛈️' },
+  96: { label: 'Thunderstorm+Hail',  icon: '⛈️' },
+  99: { label: 'Severe Storm',       icon: '⛈️' },
 };
 
 function wmo(code) {
-  return WMO[code] ?? { label: 'Unknown', icon: '🌡️', bg: 'sky nature', grad: '#1a1a2e,#2a2a4e' };
+  return WMO[code] ?? { label: 'Unknown', icon: '🌡️' };
 }
 
-// ── Background image ──────────────────────────────────────────────────────
+// ── Background gradient ────────────────────────────────────────────────────
 
-let currentBgKeyword = '';
+let currentBgKey = '';
+
+const SNOW_CODES  = new Set([71, 73, 75, 77, 85, 86]);
+const RAIN_CODES  = new Set([51, 53, 55, 61, 63, 65, 80, 81, 82]);
+const FOG_CODES   = new Set([45, 48]);
+const STORM_CODES = new Set([95, 96, 99]);
+
+function getGradient(code, isDay) {
+  if (!isDay) {
+    if (STORM_CODES.has(code)) return 'linear-gradient(to bottom,#04060e 0%,#0b0e1a 50%,#111828 100%)';
+    if (SNOW_CODES.has(code))  return 'linear-gradient(to bottom,#1c2340 0%,#263060 50%,#3a4580 100%)';
+    if (RAIN_CODES.has(code))  return 'linear-gradient(to bottom,#0c1220 0%,#172035 50%,#1e2a42 100%)';
+    if (FOG_CODES.has(code))   return 'linear-gradient(to bottom,#1a2030 0%,#2a3040 50%,#3a4050 100%)';
+    if (code >= 2)             return 'linear-gradient(to bottom,#0e1628 0%,#18243c 50%,#202e50 100%)';
+    // clear/mainly clear night — deep navy with slight indigo
+    return 'linear-gradient(to bottom,#070d20 0%,#0f1a35 40%,#1a2850 70%,#1e3060 100%)';
+  }
+  // Day
+  if (STORM_CODES.has(code))  return 'linear-gradient(to bottom,#1a1f2e 0%,#252c40 35%,#303850 65%,#3a4560 100%)';
+  if (RAIN_CODES.has(code))   return 'linear-gradient(to bottom,#2c3e4f 0%,#3d5264 35%,#4f6678 65%,#607a8c 100%)';
+  if (FOG_CODES.has(code))    return 'linear-gradient(to bottom,#6a7c88 0%,#8a9ca8 40%,#a8b8c4 70%,#c0d0d8 100%)';
+  if (SNOW_CODES.has(code))   return 'linear-gradient(to bottom,#6070a0 0%,#8090b8 35%,#a8b8d0 65%,#d0dce8 100%)';
+  if (code === 3)             return 'linear-gradient(to bottom,#4a5a68 0%,#607080 35%,#788898 65%,#8a9aaa 100%)';
+  if (code === 2)             return 'linear-gradient(to bottom,#3070a8 0%,#4a88bc 35%,#70a8d0 65%,#a8cce0 100%)';
+  if (code === 1)             return 'linear-gradient(to bottom,#1565c0 0%,#1e88e5 35%,#42a5f5 65%,#90caf9 100%)';
+  // code 0: clear sky — vivid blue to pale horizon
+  return 'linear-gradient(to bottom,#0d47a1 0%,#1565c0 20%,#1e88e5 50%,#64b5f6 80%,#b3e5fc 100%)';
+}
 
 function setBackground(code, isDay) {
-  const info = wmo(code);
-  const keyword = info.bg + (isDay === false ? ' night' : '');
-  if (keyword === currentBgKeyword) return;
-  currentBgKeyword = keyword;
+  const key = `${code}_${isDay}`;
+  if (key === currentBgKey) return;
+  currentBgKey = key;
 
   const bg = document.getElementById('bg');
   bg.style.opacity = '0';
-
-  const encoded = encodeURIComponent(keyword);
-  const img = new Image();
-  const url = `https://source.unsplash.com/1600x900/?${encoded}`;
-  img.onload = () => {
-    bg.style.backgroundImage = `url('${img.src}')`;
+  setTimeout(() => {
+    bg.style.backgroundImage = getGradient(code, isDay);
     bg.style.opacity = '1';
-  };
-  img.onerror = () => {
-    const [c1, c2] = info.grad.split(',');
-    bg.style.backgroundImage = `linear-gradient(160deg, ${c1}, ${c2})`;
-    bg.style.opacity = '1';
-  };
-  img.src = url;
+  }, 350);
 }
 
 // ── ZIP → lat/lon via zippopotam.us ───────────────────────────────────────
 
 async function zipToLatLon(zip) {
+  const cacheKey = `weather_geo_zip_${zip}`;
+  const cached = cacheGet(cacheKey, TTL.geo);
+  if (cached) return cached;
+
   const res = await fetch(`https://api.zippopotam.us/us/${zip.trim()}`);
   if (!res.ok) throw new Error(`ZIP code "${zip}" not found.`);
   const data = await res.json();
   const place = data.places[0];
-  return {
+  const result = {
     lat: parseFloat(place.latitude),
     lon: parseFloat(place.longitude),
     city: place['place name'],
     state: place['state abbreviation'],
   };
+  cacheSet(cacheKey, result);
+  return result;
 }
 
 // ── City name → lat/lon via Open-Meteo geocoding ─────────────────────────
 
 async function cityToLatLon(name) {
+  const cacheKey = `weather_geo_city_${name.toLowerCase().trim()}`;
+  const cached = cacheGet(cacheKey, TTL.geo);
+  if (cached) return cached;
+
   const res = await fetch(
     `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=en&format=json`
   );
@@ -88,18 +136,24 @@ async function cityToLatLon(name) {
   if (!data.results?.length) throw new Error(`City "${name}" not found.`);
   const r = data.results[0];
   const state = r.country_code === 'US' ? (r.admin1 ?? r.country) : (r.country ?? r.country_code);
-  return {
+  const result = {
     lat: r.latitude,
     lon: r.longitude,
     city: r.name,
     state,
     zip: '',
   };
+  cacheSet(cacheKey, result);
+  return result;
 }
 
 // ── Open-Meteo forecast ───────────────────────────────────────────────────
 
 async function fetchForecast(lat, lon) {
+  const cacheKey = `weather_forecast_${lat.toFixed(2)}_${lon.toFixed(2)}`;
+  const cached = cacheGet(cacheKey, TTL.forecast);
+  if (cached) return cached;
+
   const params = new URLSearchParams({
     latitude: lat,
     longitude: lon,
@@ -114,7 +168,9 @@ async function fetchForecast(lat, lon) {
   });
   const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
   if (!res.ok) throw new Error('Weather data unavailable.');
-  return res.json();
+  const data = await res.json();
+  cacheSet(cacheKey, data);
+  return data;
 }
 
 // ── Render ────────────────────────────────────────────────────────────────
@@ -249,17 +305,23 @@ function closeDetail() {
 // ── IP geolocation ────────────────────────────────────────────────────────
 
 async function ipToLocation() {
+  const cacheKey = 'weather_ip_loc';
+  const cached = cacheGet(cacheKey, TTL.ip);
+  if (cached) return cached;
+
   const res = await fetch('https://ipapi.co/json/');
   if (!res.ok) throw new Error('IP lookup failed');
   const data = await res.json();
   if (!data.latitude) throw new Error('No coordinates from IP');
-  return {
+  const result = {
     lat: data.latitude,
     lon: data.longitude,
     city: data.city || 'Your Location',
     state: data.region_code || data.country_code || '',
     zip: data.postal || '',
   };
+  cacheSet(cacheKey, result);
+  return result;
 }
 
 // ── Main entry ────────────────────────────────────────────────────────────
@@ -293,7 +355,7 @@ document.getElementById('zipInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') loadWeather();
 });
 
-// Boot: try IP geolocation first, fall back to default ZIP
+// Boot: try IP geolocation first, fall back to default city
 (async () => {
   document.getElementById('app').innerHTML = '<p class="status-msg">Detecting your location…</p>';
   try {

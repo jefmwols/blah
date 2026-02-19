@@ -14,7 +14,7 @@ body {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  transition: opacity 1.2s ease;
+  transition: opacity 0.7s ease;
   z-index: 0;
 }
 
@@ -89,6 +89,7 @@ body {
 
 .current-card .condition-label {
   font-size: 1.25rem;
+  font-weight: 500;
   opacity: .9;
   margin-bottom: .5rem;
 }
@@ -108,8 +109,9 @@ body {
 
 .current-meta {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 2rem;
+  gap: .5rem 1.4rem;
   margin-top: .8rem;
   opacity: .85;
   font-size: .9rem;
@@ -124,7 +126,7 @@ body {
   font-size: .8rem;
   letter-spacing: .12em;
   text-transform: uppercase;
-  opacity: .7;
+  opacity: .78;
   margin-bottom: .9rem;
   padding-bottom: .4rem;
   border-bottom: 1px solid rgba(255,255,255,0.2);
@@ -132,7 +134,7 @@ body {
 
 .forecast-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
   gap: .7rem;
 }
 
@@ -151,21 +153,21 @@ body {
   transform: translateY(-3px);
 }
 .day-card.today {
-  border-color: rgba(255,255,255,0.5);
-  background: rgba(255,255,255,0.2);
+  border-color: rgba(255,220,120,0.55);
+  background: rgba(255,210,100,0.18);
 }
 
 .day-card .day-name {
   font-size: .72rem;
   text-transform: uppercase;
   letter-spacing: .07em;
-  opacity: .75;
+  opacity: .9;
   margin-bottom: .1rem;
 }
 
 .day-card .day-date {
-  font-size: .72rem;
-  opacity: .8;
+  font-size: .65rem;
+  opacity: .55;
   margin-bottom: .3rem;
 }
 
@@ -182,7 +184,7 @@ body {
 
 .day-card .day-lo {
   font-size: .82rem;
-  opacity: .65;
+  opacity: .72;
   margin-top: .1rem;
 }
 
