@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>10-Day Weather Forecast</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      background: #1a1a2e;
+      color: #fff;
+      transition: background 1s ease;
+    }
+
+    #bg {
+      position: fixed;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      transition: opacity 1.2s ease;
+      z-index: 0;
+    }
+
+    #bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to bottom,
+        rgba(0,0,0,0.35) 0%,
+        rgba(0,0,0,0.55) 60%,
+        rgba(0,0,0,0.75) 100%
+      );
+    }
+
+    .page {
+      position: relative;
+      z-index: 1;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 3rem;
+    }
+
+    /* Search bar */
+    .search-row {
+      display: flex;
+      gap: .5rem;
+      justify-content: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .search-row input {
+      padding: .65rem 1.1rem;
+      border-radius: 2rem;
+      border: 1.5px solid rgba(255,255,255,0.4);
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      font-size: 1rem;
+      width: 180px;
+      backdrop-filter: blur(8px);
+      outline: none;
+      transition: border-color .2s;
+    }
+    .search-row input::placeholder { color: rgba(255,255,255,0.6); }
+    .search-row input:focus { border-color: rgba(255,255,255,0.9); }
+
+    .search-row button {
+      padding: .65rem 1.4rem;
+      border-radius: 2rem;
+      border: none;
+      background: rgba(255,255,255,0.25);
+      color: #fff;
+      font-size: .95rem;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      transition: background .2s;
+    }
+    .search-row button:hover { background: rgba(255,255,255,0.4); }
+
+    /* Current weather */
+    .current-card {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .current-card .location {
+      font-size: 1.1rem;
+      opacity: .8;
+      letter-spacing: .04em;
+      margin-bottom: .3rem;
+    }
+
+    .current-card .condition-label {
+      font-size: 1.25rem;
+      opacity: .9;
+      margin-bottom: .5rem;
+    }
+
+    .current-card .big-temp {
+      font-size: clamp(4rem, 12vw, 7rem);
+      font-weight: 200;
+      line-height: 1;
+      letter-spacing: -.03em;
+    }
+
+    .current-card .big-icon {
+      font-size: clamp(2.5rem, 6vw, 4rem);
+      display: block;
+      margin-bottom: .4rem;
+    }
+
+    .current-meta {
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      margin-top: .8rem;
+      opacity: .85;
+      font-size: .9rem;
+    }
+
+    .current-meta span::before {
+      margin-right: .3em;
+    }
+
+    /* 10-day grid */
+    .forecast-title {
+      font-size: .8rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      opacity: .7;
+      margin-bottom: .9rem;
+      padding-bottom: .4rem;
+      border-bottom: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .forecast-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+      gap: .7rem;
+    }
+
+    .day-card {
+      background: rgba(255,255,255,0.12);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 1rem;
+      padding: .9rem .6rem;
+      text-align: center;
+      transition: background .2s, transform .15s;
+      cursor: default;
+    }
+    .day-card:hover {
+      background: rgba(255,255,255,0.22);
+      transform: translateY(-3px);
+    }
+    .day-card.today {
+      border-color: rgba(255,255,255,0.5);
+      background: rgba(255,255,255,0.2);
+    }
+
+    .day-card .day-name {
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      opacity: .75;
+      margin-bottom: .35rem;
+    }
+
+    .day-card .day-icon {
+      font-size: 1.7rem;
+      line-height: 1;
+      margin-bottom: .35rem;
+    }
+
+    .day-card .day-hi {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .day-card .day-lo {
+      font-size: .82rem;
+      opacity: .65;
+      margin-top: .1rem;
+    }
+
+    .day-card .day-rain {
+      font-size: .72rem;
+      opacity: .7;
+      margin-top: .3rem;
+    }
+
+    /* Error / loading */
+    .status-msg {
+      text-align: center;
+      opacity: .8;
+      padding: 2rem;
+      font-size: 1rem;
+    }
+
+    .error-msg {
+      color: #ffb3b3;
+      text-align: center;
+      padding: 1rem;
+      background: rgba(255,0,0,0.15);
+      border-radius: .7rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+<div id="bg"></div>
+
+<div class="page">
+  <div class="search-row">
+    <input type="text" id="zipInput" placeholder="ZIP code" maxlength="10" />
+    <button onclick="loadWeather()">Go</button>
+  </div>
+
+  <div id="app">
+    <p class="status-msg">Loading forecast…</p>
+  </div>
+</div>
+
+<script>
+  const DEFAULT_ZIP = '38256';
+
+  // ── Weather code helpers ──────────────────────────────────────────────────
+
+  const WMO = {
+    0:  { label: 'Clear Sky',         icon: '☀️',  bg: 'clear sky sunshine blue',        grad: '#1a6ba0,#87CEEB' },
+    1:  { label: 'Mainly Clear',      icon: '🌤️', bg: 'partly cloudy blue sky',          grad: '#2a7ab5,#90c8e0' },
+    2:  { label: 'Partly Cloudy',     icon: '⛅',  bg: 'partly cloudy sky',               grad: '#3a6b8a,#90a8c0' },
+    3:  { label: 'Overcast',          icon: '☁️',  bg: 'overcast grey sky clouds',        grad: '#3a4a5a,#6a7a8a' },
+    45: { label: 'Foggy',             icon: '🌫️', bg: 'foggy misty morning nature',      grad: '#5a6a7a,#8a9aaa' },
+    48: { label: 'Icy Fog',           icon: '🌫️', bg: 'foggy misty winter',              grad: '#5a6a7a,#9aaabb' },
+    51: { label: 'Light Drizzle',     icon: '🌦️', bg: 'light rain drizzle nature',       grad: '#2a4a6a,#4a7a9a' },
+    53: { label: 'Drizzle',           icon: '🌧️', bg: 'rainy day grey sky',              grad: '#2a4060,#405070' },
+    55: { label: 'Heavy Drizzle',     icon: '🌧️', bg: 'heavy rain storm clouds',         grad: '#202a3a,#304050' },
+    61: { label: 'Light Rain',        icon: '🌦️', bg: 'rain drops water nature',         grad: '#1a3a5a,#2a5070' },
+    63: { label: 'Rain',              icon: '🌧️', bg: 'rainy weather grey',              grad: '#1a304a,#2a4060' },
+    65: { label: 'Heavy Rain',        icon: '🌧️', bg: 'heavy rain storm dark clouds',    grad: '#101a2a,#202a3a' },
+    71: { label: 'Light Snow',        icon: '🌨️', bg: 'light snowfall winter landscape', grad: '#5a6a8a,#b0c0d8' },
+    73: { label: 'Snow',              icon: '❄️',  bg: 'snow winter landscape serene',    grad: '#4a5a7a,#a0b0c8' },
+    75: { label: 'Heavy Snow',        icon: '❄️',  bg: 'heavy snowstorm blizzard',        grad: '#3a4a6a,#8090a8' },
+    77: { label: 'Snow Grains',       icon: '🌨️', bg: 'snow grains winter sky',          grad: '#4a5a78,#9aaac0' },
+    80: { label: 'Rain Showers',      icon: '🌦️', bg: 'rain shower clouds nature',       grad: '#1a3a5a,#3a5a7a' },
+    81: { label: 'Heavy Showers',     icon: '🌧️', bg: 'heavy rain shower storm',         grad: '#101a2a,#1a2a3a' },
+    82: { label: 'Violent Showers',   icon: '⛈️', bg: 'violent storm rain dark sky',     grad: '#0a1020,#101a28' },
+    85: { label: 'Snow Showers',      icon: '🌨️', bg: 'snow shower winter',              grad: '#3a4a6a,#8090b0' },
+    86: { label: 'Heavy Snow Showers',icon: '❄️',  bg: 'heavy snowfall blizzard',         grad: '#2a3a5a,#6070a0' },
+    95: { label: 'Thunderstorm',      icon: '⛈️', bg: 'thunderstorm lightning dark sky',  grad: '#0a0f1a,#0f1a28' },
+    96: { label: 'Thunderstorm+Hail', icon: '⛈️', bg: 'thunderstorm hail storm',          grad: '#080e18,#0e1820' },
+    99: { label: 'Severe Storm',      icon: '⛈️', bg: 'severe thunderstorm lightning',    grad: '#060b12,#0b1018' },
+  };
+
+  function wmo(code) {
+    return WMO[code] ?? { label: 'Unknown', icon: '🌡️', bg: 'sky nature', grad: '#1a1a2e,#2a2a4e' };
+  }
+
+  // ── Background image ──────────────────────────────────────────────────────
+
+  let currentBgKeyword = '';
+
+  function setBackground(code, isDay) {
+    const info = wmo(code);
+    const keyword = info.bg + (isDay === false ? ' night' : '');
+    if (keyword === currentBgKeyword) return;
+    currentBgKeyword = keyword;
+
+    const bg = document.getElementById('bg');
+    bg.style.opacity = '0';
+
+    // Use Unsplash random photo by keyword (no API key needed)
+    const encoded = encodeURIComponent(keyword);
+    const img = new Image();
+    const url = `https://source.unsplash.com/1600x900/?${encoded}`;
+    img.onload = () => {
+      bg.style.backgroundImage = `url('${img.src}')`;
+      bg.style.opacity = '1';
+    };
+    img.onerror = () => {
+      // Fallback: gradient
+      const [c1, c2] = info.grad.split(',');
+      bg.style.backgroundImage = `linear-gradient(160deg, ${c1}, ${c2})`;
+      bg.style.opacity = '1';
+    };
+    img.src = url;
+  }
+
+  // ── ZIP → lat/lon via zippopotam.us ───────────────────────────────────────
+
+  async function zipToLatLon(zip) {
+    const res = await fetch(`https://api.zippopotam.us/us/${zip.trim()}`);
+    if (!res.ok) throw new Error(`ZIP code "${zip}" not found.`);
+    const data = await res.json();
+    const place = data.places[0];
+    return {
+      lat: parseFloat(place.latitude),
+      lon: parseFloat(place.longitude),
+      city: place['place name'],
+      state: place['state abbreviation'],
+    };
+  }
+
+  // ── Open-Meteo forecast ───────────────────────────────────────────────────
+
+  async function fetchForecast(lat, lon) {
+    const params = new URLSearchParams({
+      latitude: lat,
+      longitude: lon,
+      current: 'temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m,is_day',
+      daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
+      temperature_unit: 'fahrenheit',
+      wind_speed_unit: 'mph',
+      precipitation_unit: 'inch',
+      timezone: 'auto',
+      forecast_days: 10,
+    });
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+    if (!res.ok) throw new Error('Weather data unavailable.');
+    return res.json();
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  function dayLabel(dateStr, index) {
+    if (index === 0) return 'Today';
+    const d = new Date(dateStr + 'T12:00:00');
+    return d.toLocaleDateString('en-US', { weekday: 'short' });
+  }
+
+  function renderWeather(location, data) {
+    const c = data.current;
+    const d = data.daily;
+    const info = wmo(c.weather_code);
+
+    setBackground(c.weather_code, c.is_day === 1);
+
+    const forecastCards = d.time.map((date, i) => {
+      const di = wmo(d.weather_code[i]);
+      const rain = d.precipitation_probability_max[i];
+      return `
+        <div class="day-card ${i === 0 ? 'today' : ''}">
+          <div class="day-name">${dayLabel(date, i)}</div>
+          <div class="day-icon">${di.icon}</div>
+          <div class="day-hi">${Math.round(d.temperature_2m_max[i])}°</div>
+          <div class="day-lo">${Math.round(d.temperature_2m_min[i])}°</div>
+          ${rain != null ? `<div class="day-rain">💧${rain}%</div>` : ''}
+        </div>`;
+    }).join('');
+
+    document.getElementById('app').innerHTML = `
+      <div class="current-card">
+        <div class="location">${location.city}, ${location.state} · ${location.zip}</div>
+        <span class="big-icon">${info.icon}</span>
+        <div class="condition-label">${info.label}</div>
+        <div class="big-temp">${Math.round(c.temperature_2m)}°F</div>
+        <div class="current-meta">
+          <span>💨 ${Math.round(c.wind_speed_10m)} mph</span>
+          <span>💧 ${c.relative_humidity_2m}% humidity</span>
+          <span>Hi ${Math.round(d.temperature_2m_max[0])}° / Lo ${Math.round(d.temperature_2m_min[0])}°</span>
+        </div>
+      </div>
+
+      <div class="forecast-title">10-Day Forecast</div>
+      <div class="forecast-grid">${forecastCards}</div>
+    `;
+  }
+
+  // ── Main entry ────────────────────────────────────────────────────────────
+
+  async function loadWeather() {
+    const zip = document.getElementById('zipInput').value.trim() || DEFAULT_ZIP;
+    document.getElementById('zipInput').value = zip;
+
+    document.getElementById('app').innerHTML = '<p class="status-msg">Fetching forecast…</p>';
+
+    try {
+      const location = await zipToLatLon(zip);
+      location.zip = zip;
+      const data = await fetchForecast(location.lat, location.lon);
+      renderWeather(location, data);
+    } catch (err) {
+      document.getElementById('app').innerHTML = `
+        <p class="error-msg">⚠️ ${err.message}</p>
+        <p class="status-msg">Please check the ZIP code and try again.</p>`;
+    }
+  }
+
+  // Allow Enter key in input
+  document.getElementById('zipInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') loadWeather();
+  });
+
+  // Boot with default ZIP
+  document.getElementById('zipInput').value = DEFAULT_ZIP;
+  loadWeather();
+</script>
+</body>
+</html>
