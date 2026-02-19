@@ -121,6 +121,20 @@ body {
   margin-right: .3em;
 }
 
+.radar-link {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: .35rem .9rem;
+  border: 1px solid rgba(255,255,255,.45);
+  border-radius: 2rem;
+  color: inherit;
+  text-decoration: none;
+  font-size: .8rem;
+  opacity: .8;
+  transition: opacity .15s, background .15s;
+}
+.radar-link:hover { opacity: 1; background: rgba(255,255,255,.15); }
+
 /* 12-day grid */
 .forecast-title {
   font-size: .8rem;
